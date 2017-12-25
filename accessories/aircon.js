@@ -269,6 +269,7 @@ class AirConAccessory extends BroadlinkRMAccessory {
     // Itterate through each hex config in the array
     for (let index = 0; index < dataAr.length; index++) {
       const hexDataPart = dataAr[index]
+      this.log(`${name} hexDataPart:${hexDataPart}`);
       setTimeout(() => {
         sendData({ host, hexDataPart, log, name }); 
       }, index * 1000);
