@@ -264,13 +264,13 @@ class AirConAccessory extends BroadlinkRMAccessory {
     state.lastUsedTemperature = state.targetTemperature;
     state.lastUsedHeatingCoolingState = state.currentHeatingCoolingState;
 
-    var data = Array.isArray(hexData.data) ? hexData.data : [hexData.data];  
+    var dataAr = Array.isArray(hexData.data) ? hexData.data : [hexData.data];  
 
     // Itterate through each hex config in the array
-    for (let index = 0; index < data.length; index++) {
-      const hexData = data[index]
+    for (let index = 0; index < dataAr.length; index++) {
+      const hexDataPart = dataAr[index]
       setTimeout(() => {
-        sendData({ host, hexData, log, name }); 
+        sendData({ host, hexDataPart, log, name }); 
       }, index * 1000);
     }   
   }
