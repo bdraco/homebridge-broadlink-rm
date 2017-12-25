@@ -221,7 +221,7 @@ class AirConAccessory extends BroadlinkRMAccessory {
   }
 
   // Thermostat
-  sendTemperature (temperature, previousTemperature) {
+  async sendTemperature (temperature, previousTemperature) {
     const { config, data, host, log, name, state } = this;
     const { defaultHeatTemperature, defaultCoolTemperature, heatTemperature } = config;
 
