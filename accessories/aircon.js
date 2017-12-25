@@ -1,5 +1,6 @@
 const BroadlinkRMAccessory = require('./accessory');
 const getDevice = require('../helpers/getDevice');
+const delayForDuration = require('../helpers/delayForDuration');
 const sendData = require('../helpers/sendData');
 
 class AirConAccessory extends BroadlinkRMAccessory {
@@ -264,7 +265,14 @@ class AirConAccessory extends BroadlinkRMAccessory {
     state.lastUsedTemperature = state.targetTemperature;
     state.lastUsedHeatingCoolingState = state.currentHeatingCoolingState;
 
-    sendData({ host, hexData: hexData.data, log, name });
+    var data = Array.isArray(hexData.data) ? hexData.data : [hexData.data];  
+
+    // Itterate through each hex config in the array
+    for (let index = 0; index < data.length; index++) {
+      const hexData = data[index]
+      sendData({ host, hexData, log, name }); 
+      await delayForDuration(0.1);
+    }   
   }
 
 	getCurrentHeatingCoolingState () {
