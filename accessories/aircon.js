@@ -30,14 +30,15 @@ class AirConAccessory extends BroadlinkRMAccessory {
     if (state.firstTemperatureUpdate === undefined) state.firstTemperatureUpdate = true;
 
     config.minTemperature = minTemperature || 0;
-    config.maxTemperature = maxTemperature || 30;
+    // the original author must not have lived in a warm climate.
+    config.maxTemperature = maxTemperature || 40;
 
     if (config.temperatureDisplayUnits === undefined) config.temperatureDisplayUnits = (units && units.toLowerCase() === 'f') ? Characteristic.TemperatureDisplayUnits.FAHRENHEIT : Characteristic.TemperatureDisplayUnits.CELSIUS;
 
     // When a temperature hex doesn't exist we try to use the hex set for these
     // default temperatures
     config.defaultCoolTemperature = defaultCoolTemperature || 16;
-    config.defaultHeatTemperature = defaultHeatTemperature || 30;
+    config.defaultHeatTemperature = defaultHeatTemperature || 40;
 
     // Used to determine when we should use the defaultHeatTemperature or the
     // defaultHeatTemperature
