@@ -1,62 +1,87 @@
+const ServiceManagerTypes = require('../helpers/serviceManagerTypes');
 const sendData = require('../helpers/sendData');
 const delayForDuration = require('../helpers/delayForDuration')
-const BroadlinkRMAccessory = require('./accessory');
+const SwitchAccessory = require('./switch');
+const catchDelayCancelError = require('../helpers/catchDelayCancelError');
 
-class SwitchMultiAccessory extends BroadlinkRMAccessory {
+class SwitchMultiAccessory extends SwitchAccessory {
 
-  constructor (log, config = {}) {
-    super(log, config)
+  constructor (log, config = {}, serviceManagerType) {    
+    super(log, config, serviceManagerType);
 
     const { data } = this
 
     if (!Array.isArray(data)) return log('The "switch-multi" type requires the config value for "data" to be an array of hex codes.')
   }
 
+  checkStateWithPing () { }
+
+  setDefaults () {
+    super.setDefaults();
+
+    const { config } = this;
+
+    config.interval = config.interval || 1;
+  }
+
+  reset () {
+    super.reset();
+
+    // Clear Timeouts
+    if (this.intervalTimeoutPromise) {
+      this.intervalTimeoutPromise.cancel();
+      this.intervalTimeoutPromise = null;
+    }
+  }
+
   async setSwitchState (hexData) {
-    if (hexData) this.performSend(hexData);
-  }
+    const { config, host, log, name, state, debug } = this;
+    let { interval } = config;
 
-  async performSend (data) {
-    const { config, host, log, name, state } = this;
-    let { disableAutomaticOff, interval } = config;
+    if (!hexData) {
+      this.checkAutoOnOff();
 
-    // Itterate through each hex config in the array
-    for (let index = 0; index < data.length; index++) {
-      const hexData = data[index]
-
-      sendData({ host, hexData, log, name });
-
-      if (index < data.length - 1) await delayForDuration(interval);
+      return;
     }
+    
+    await catchDelayCancelError(async () => { 
+      // Itterate through each hex config in the array
+      for (let index = 0; index < hexData.length; index++) {
+        const currentHexData = hexData[index]
 
-    if (state.switchState && !disableAutomaticOff) {
-      await delayForDuration(0.1);
+        sendData({ host, hexData: currentHexData, log, name, debug });
 
-      this.switchService.setCharacteristic(Characteristic.On, 0);
-    }
-  }
-
-  getServices () {
-    const services = super.getServices();
-    const { data, name } = this;
-
-    const service = new Service.Switch(name);
-    this.addNameService(service);
-
-    this.createToggleCharacteristic({
-      service,
-      characteristicType: Characteristic.On,
-      propertyName: 'switchState',
-      onData: Array.isArray(data) ? data : data.on,
-      offData: Array.isArray(data) ? undefined : data.off,
-      setValuePromise: this.setSwitchState.bind(this)
+        if (index < currentHexData.length - 1) {
+          this.intervalTimeoutPromise = delayForDuration(interval);
+          await this.intervalTimeoutPromise;
+        }
+      }
     })
 
-    services.push(service);
+    this.checkAutoOnOff();
+  }
 
-    this.switchService = service;
+  setupServiceManager () {
+    const { data, log, name, config, serviceManagerType } = this;
 
-    return services;
+    setTimeout(() => {
+      log(`\x1b[33m[Warning] \x1b[0m${name}: The "switch-multi" accessory is now deprecated and shall be removed in the future. Check out the updated "switch" documentation at http://github.com/lprhodes/homebridge-broadlink-rm`);
+    }, 1600)
+    
+    this.serviceManager = new ServiceManagerTypes[serviceManagerType](name, Service.Switch, this.log);
+
+    this.serviceManager.addToggleCharacteristic({
+      name: 'switchState',
+      type: Characteristic.On,
+      getMethod: this.getCharacteristicValue,
+      setMethod: this.setCharacteristicValue,
+      bind: this,
+      props: {
+        onData: Array.isArray(data) ? data : data.on,
+        offData: Array.isArray(data) ? undefined : data.off,
+        setValuePromise: this.setSwitchState.bind(this)
+      }
+    });
   }
 }
 

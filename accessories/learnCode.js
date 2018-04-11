@@ -1,23 +1,28 @@
 const learnData = require('../helpers/learnData');
 const learnRFData = require('../helpers/learnRFData');
+const ServiceManager = require('../helpers/serviceManager');
+const ServiceManagerTypes = require('../helpers/serviceManagerTypes');
+
 const BroadlinkRMAccessory = require('./accessory');
 
 class LearnIRAccessory extends BroadlinkRMAccessory {
 
-  constructor (log, config = {}) {
+  constructor (log, config = {}, serviceManagerType) {    
+
     // Set a default name for the accessory
     if (!config.name) config.name = 'Learn Code';
     config.persistState = false;
 
-    super(log, config);
+
+    super(log, config, serviceManagerType);
   }
 
-  toggleLearning (on, callback) {
-    const { config } = this;
+  toggleLearning (props, on, callback) {
+    const { config, serviceManager } = this;
     const { disableAutomaticOff, scanRF, scanFrequency } = config;
 
     const turnOffCallback = () => {
-      this.learnService.setCharacteristic(Characteristic.On, false);
+      serviceManager.setCharacteristic(Characteristic.On, false);
     }
 
     if (scanRF || scanFrequency) {
@@ -41,18 +46,23 @@ class LearnIRAccessory extends BroadlinkRMAccessory {
     }
   }
 
-  getServices () {
-    const services = super.getServices();
-    const { data, name } = this;
+  setupServiceManager () {
+    const { data, name, config, serviceManagerType } = this;
+    const { on, off } = data || { };
 
-    const service = new Service.Switch(name);
-    this.addNameService(service);
-    service.getCharacteristic(Characteristic.On).on('set', this.toggleLearning.bind(this));
+    this.serviceManager = new ServiceManagerTypes[serviceManagerType](name, Service.Switch, this.log);
 
-    this.learnService = service
-    services.push(service);
-
-    return services;
+    this.serviceManager.addToggleCharacteristic({
+      name: 'switchState',
+      type: Characteristic.On,
+      getMethod: this.getCharacteristicValue,
+      setMethod: this.toggleLearning.bind(this),
+      bind: this,
+      props: {
+      
+      },
+      bind: this
+    })
   }
 }
 

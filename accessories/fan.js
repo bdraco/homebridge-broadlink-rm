@@ -1,15 +1,25 @@
-const sendData = require('../helpers/sendData');
-const BroadlinkRMAccessory = require('./accessory');
+const ServiceManagerTypes = require('../helpers/serviceManagerTypes');
 
-class FanAccessory extends BroadlinkRMAccessory {
+const SwitchAccessory = require('./switch');
+
+class FanAccessory extends SwitchAccessory {
+
+  async setSwitchState (hexData, previousValue) {
+    if (!this.state.switchState) {
+      this.lastFanSpeed = undefined;
+    }
+
+    super.setSwitchState(hexData, previousValue);
+  }
 
   async setFanSpeed (hexData) {
-    const { data, host, log, state , name} = this;
+    const { data, host, log, state, name, debug} = this;
 
-    const allHexKeys = Object.keys(data);
+    this.reset();
 
     // Create an array of speeds specified in the data config
     const foundSpeeds = [];
+    const allHexKeys = Object.keys(data || {});
 
     allHexKeys.forEach((key) => {
       const parts = key.split('fanSpeed');
@@ -19,83 +29,91 @@ class FanAccessory extends BroadlinkRMAccessory {
       foundSpeeds.push(parts[1])
     })
 
-    if (foundSpeeds.length === 0) return log(`${name} setFanSpeed: No fan speed hex codes provided.`)
+    if (foundSpeeds.length === 0) {
+
+      return log(`${name} setFanSpeed: No fan speed hex codes provided.`)
+    }
 
     // Find speed closest to the one requested
     const closest = foundSpeeds.reduce((prev, curr) => Math.abs(curr - state.fanSpeed) < Math.abs(prev - state.fanSpeed) ? curr : prev);
     log(`${name} setFanSpeed: (closest: ${closest})`);
 
+    if (this.lastFanSpeed === closest) {
+      return;
+    }
+
+    this.lastFanSpeed = closest;
+
     // Get the closest speed's hex data
     hexData = data[`fanSpeed${closest}`];
 
-    sendData({ host, hexData, log, name });
+    await this.performSend(hexData);
+
+    this.checkAutoOnOff();
   }
 
-  getServices () {
-    const services = super.getServices();
-    const { config, data, name } = this;
-    const { hideSwingMode, hideV1Fan, hideV2Fan } = config;
-    const { on, off, swingToggle } = data;
+  setupServiceManager () {
+    const { config, data, name, serviceManagerType } = this;
+    let { showSwingMode, showRotationDirection, hideSwingMode, hideRotationDirection } = config;
+    const { on, off, clockwise, counterClockwise, swingToggle } = data || {};
 
-    let service
+    // Defaults
+    if (showSwingMode !== false && hideSwingMode !== true) showSwingMode = true
+    if (showRotationDirection !== false && hideRotationDirection !== true) showRotationDirection = true
 
-    if (!hideV1Fan) {
-  	  // Until FanV2 service is supported completely in Home app, we have to add legacy
-      service = new Service.Fan(name);
+    this.serviceManager = new ServiceManagerTypes[serviceManagerType](name, Service.Fanv2, this.log);
 
-      this.addNameService(service);
-      this.createToggleCharacteristic({
-        service,
-        characteristicType: Characteristic.On,
-        propertyName: 'switchState',
+    this.serviceManager.addToggleCharacteristic({
+      name: 'switchState',
+      type: Characteristic.On,
+      getMethod: this.getCharacteristicValue,
+      setMethod: this.setCharacteristicValue,
+      bind: this,
+      props: {
         onData: on,
-        offData: off
-      });
-
-      this.createToggleCharacteristic({
-        service,
-        characteristicType: Characteristic.RotationSpeed,
-        propertyName: 'fanSpeed',
-        setValuePromise: this.setFanSpeed.bind(this)
-      });
-
-      services.push(service);
-    }
-
-    if (!hideV2Fan) {
-      // Fanv2 service
-      service = new Service.Fanv2(name);
-      this.addNameService(service);
-
-      this.createToggleCharacteristic({
-        service,
-        characteristicType: Characteristic.Active,
-        propertyName: 'switchState',
-        onData: on,
-        offData: off
-      });
-
-      if (!hideSwingMode) {
-        this.createToggleCharacteristic({
-          service,
-          characteristicType: Characteristic.SwingMode,
-          propertyName: 'swingMode',
-          onData: swingToggle,
-          offData: swingToggle
-        });
+        offData: off,
+        setValuePromise: this.setSwitchState.bind(this)
       }
+    });
 
-      this.createToggleCharacteristic({
-        service,
-        characteristicType: Characteristic.RotationSpeed,
-        propertyName: 'fanSpeed',
-        setValuePromise: this.setFanSpeed.bind(this)
+    if (showSwingMode) {
+      this.serviceManager.addToggleCharacteristic({
+        name: 'swingMode',
+        type: Characteristic.SwingMode,
+        getMethod: this.getCharacteristicValue,
+        setMethod: this.setCharacteristicValue,
+        bind: this,
+        props: {
+          onData: swingToggle,
+          offData: swingToggle,
+        }
       });
-
-      services.push(service);
     }
 
-    return services;
+    this.serviceManager.addToggleCharacteristic({
+      name: 'fanSpeed',
+      type: Characteristic.RotationSpeed,
+      getMethod: this.getCharacteristicValue,
+      setMethod: this.setCharacteristicValue,
+      bind: this,
+      props: {
+        setValuePromise: this.setFanSpeed.bind(this)
+      }
+    });
+
+    if (showRotationDirection) {
+      this.serviceManager.addToggleCharacteristic({
+        name: 'rotationDirection',
+        type: Characteristic.RotationDirection,
+        getMethod: this.getCharacteristicValue,
+        setMethod: this.setCharacteristicValue,
+        bind: this,
+        props: {
+          onData: counterClockwise,
+          offData: clockwise
+        }
+      });
+    }
   }
 }
 
